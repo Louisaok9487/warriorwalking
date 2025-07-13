@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Warrior Game</title>
+    <title>Great Warrior</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Tone.js for sound effects -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
@@ -19,7 +19,7 @@
             overflow: hidden; /* Prevent scrollbars */
         }
         canvas {
-            background-color: #2d3748; /* Darker grey for game background */
+            background-color: transparent; /* Changed to transparent to allow custom drawing */
             border: 4px solid #4a5568; /* Border around the game area */
             border-radius: 8px; /* Rounded corners for the canvas */
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5); /* Soft shadow */
@@ -70,21 +70,66 @@
             display: none; /* Hidden by default */
             box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
         }
+        #gameOverScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 40px;
+            border-radius: 15px;
+            border: 3px solid #ef4444; /* Red border for game over */
+            font-size: 2rem;
+            text-align: center;
+            z-index: 200; /* Higher than messageBox */
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+        #gameOverScreen h2 {
+            font-size: 3em;
+            color: #ef4444; /* Red for Game Over text */
+            margin-bottom: 10px;
+        }
+        #gameOverScreen p {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        #restartButton {
+            background-color: #4a5568; /* Tailwind blue-600 */
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.5em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #restartButton:hover {
+            background-color: #636b7b; /* Darker blue on hover */
+        }
     </style>
 </head>
 <body>
     <div class="game-container">
         <div class="instructions">
-            <p><strong>Pixel Warrior Game</strong></p>
+            <p><strong>Great Warrior</strong></p>
             <p>Use <strong>Arrow Keys</strong> to move your warrior.</p>
             <p>Move <strong>towards</strong> a monster to <strong>attack</strong>!</p>
-            <p>The warrior will 'breathe' when idle, and a monster will chase you!</p>
-            <p><strong>Sound effects added for combat!</strong></p>
-            <p><strong>IMPORTANT: Remember to update your actual pixel warrior PNG images to 80x80 pixels and replace the placeholder image URLs in the code for both warrior and monster!</strong></p>
         </div>
         <canvas id="gameCanvas"></canvas>
         <div id="loadingMessage" style="display: none;">Loading game assets...</div>
         <div id="messageBox" style="display: none;"></div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" style="display: none;">
+            <h2>GAME OVER</h2>
+            <p id="gameOverMessage"></p>
+            <button id="restartButton">Restart Game</button>
+        </div>
     </div>
 
     <script>
@@ -101,45 +146,65 @@
         const MONSTER_MOVE_INTERVAL = 1000; // Monster moves every 1000 milliseconds (1 second)
         const MONSTER_RESPAWN_DELAY = 3000; // Monster respawns after 3 seconds
 
-        // Player object
-        const player = {
-            x: 0, // Initial X position
-            y: 0, // Initial Y position
-            direction: 'down', // Initial direction
-            isIdle: true, // Flag to track if the player is idle for breathing animation
-            lastMoveTime: Date.now(), // Timestamp of the last movement
-            breathingFrameIndex: 0, // Current frame index for discrete breathing animation
-            lastBreathingFrameTime: 0, // Timestamp of the last breathing frame update
-            hp: 100, // Player's current health points
-            maxHp: 100, // Player's maximum health points
-            xp: 0, // Player's experience points
-            attackDamage: 20, // Damage player deals
-            level: 1, // Player's current level
-            monstersDefeatedCount: 0, // Counter for monsters defeated for leveling up
-            monstersToLevelUp: 3 // Number of monsters to defeat to level up
+        // Player object (initial state)
+        const initialPlayerState = {
+            x: 0,
+            y: 0,
+            direction: 'down',
+            isIdle: true,
+            lastMoveTime: Date.now(),
+            breathingFrameIndex: 0,
+            lastBreathingFrameTime: 0,
+            hp: 100,
+            maxHp: 100,
+            xp: 0,
+            attackDamage: 20,
+            level: 1,
+            monstersDefeatedCount: 0,
+            monstersToLevelUp: 3,
+            isFlashing: false,
+            flashTimer: 0,
+            flashDuration: 150,
+            isShaking: false,
+            shakeTimer: 0,
+            lastFrameTime: 0
         };
+        let player = { ...initialPlayerState }; // Create a copy for current game state
 
-        // Monster object
-        const monster = {
-            x: 0, // Initial X position (will be set in resizeCanvas)
-            y: 0, // Initial Y position (will be set in resizeCanvas)
-            direction: 'down', // Initial direction for image
-            speed: playerSpeed, // Monster moves one block (40px) at a time
-            lastMoveTime: 0, // To control 1-second interval
-            hp: 50, // Monster's current health points
-            maxHp: 50, // Monster's maximum health points
-            attackDamage: 10, // Damage monster deals
-            xpValue: 25, // XP gained when monster is defeated
-            isDefeated: false // Flag to track if monster is defeated
+        // Monster object (initial state)
+        const initialMonsterState = {
+            x: 0,
+            y: 0,
+            direction: 'down',
+            speed: playerSpeed,
+            lastMoveTime: 0,
+            hp: 50,
+            maxHp: 50,
+            attackDamage: 10,
+            xpValue: 25,
+            isDefeated: false,
+            isFlashing: false,
+            flashTimer: 0,
+            flashDuration: 150,
+            isShaking: false,
+            shakeTimer: 0,
+            lastFrameTime: 0
         };
+        let monster = { ...initialMonsterState }; // Create a copy for current game state
+
 
         // Breathing animation constants for stepped animation
         const BREATHING_FRAMES = [0, -2, 0, 2]; // Vertical offsets in pixels: normal, 2px up, normal, 2px down
         const BREATHING_INTERVAL = 200; // Milliseconds between each breathing frame change (slightly slower)
         const IDLE_DELAY = 200; // Milliseconds before breathing animation starts after stopping
 
+        // Shaking animation constants
+        const SHAKE_AMPLITUDE = 3; // Max pixels to shake (how much it moves)
+        const SHAKE_DURATION = 200; // How long to shake in ms
+
         // Image URLs for different directions
-        // IMPORTANT: Replace these with your actual pixel warrior PNG URLs (now 80x80 pixels)
+        // IMPORTANT: Ensure these paths are correct relative to your HTML file!
+        // E.g., if your HTML is in the root and images are in a folder named 'images', these are correct.
         const warriorImageUrls = {
             'up': './images/warrior_up.png',
             'down': './images/warrior_down.png',
@@ -148,7 +213,7 @@
         };
 
         // Monster image URLs
-        // IMPORTANT: Replace these with your actual pixel monster PNG URLs (also 80x80 pixels recommended)
+        // IMPORTANT: Ensure these paths are correct relative to your HTML file!
         const monsterImageUrls = {
             'monster_up': './images/monster_up.png',
             'monster_down': './images/monster_down.png',
@@ -177,9 +242,17 @@
         // A slightly different synth for a "defeat" sound
         const defeatSynth = new Tone.Synth().toDestination();
 
+        // Cooldown for hit sound to prevent rapid triggering and Tone.js errors
+        let lastHitSoundTime = 0;
+        const hitSoundCooldown = 100; // milliseconds
+
         // Function to play a hit sound
         function playHitSound() {
-            hitSynth.triggerAttackRelease("C4", "8n"); // Plays a C4 note for an 8th note duration
+            const currentTime = performance.now();
+            if (currentTime - lastHitSoundTime > hitSoundCooldown) {
+                hitSynth.triggerAttackRelease("C4", "8n"); // Plays a C4 note for an 8th note duration
+                lastHitSoundTime = currentTime;
+            }
         }
 
         // Function to play a defeat sound
@@ -197,6 +270,45 @@
                 messageBox.style.display = 'none';
             }, duration);
         }
+
+        // --- Game Over Screen Elements ---
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const gameOverMessage = document.getElementById('gameOverMessage');
+        const restartButton = document.getElementById('restartButton');
+
+        // Function to reset all game state and restart
+        function restartGame() {
+            // Reset player and monster to their initial states
+            player = { ...initialPlayerState };
+            monster = { ...initialMonsterState };
+
+            // Re-center player (needed after canvas resize or initial load)
+            player.x = Math.floor((canvas.width / 2 - playerSize / 2) / playerSpeed) * playerSpeed;
+            player.y = Math.floor((canvas.height / 2 - playerSize / 2) / playerSpeed) * playerSpeed;
+            player.lastMoveTime = Date.now(); // Reset player's last move time
+            player.lastFrameTime = performance.now(); // Reset player's last frame time for animations
+
+            // Reset monster position and its animation timers
+            resetMonster();
+            monster.lastMoveTime = performance.now(); // Ensure monster starts moving immediately
+            monster.lastFrameTime = performance.now(); // Reset monster's last frame time for animations
+
+
+            gameOver = false; // Reset game over flag
+            gameOverScreen.style.display = 'none'; // Hide game over screen
+            messageBox.style.display = 'none'; // Hide any lingering messages
+
+            // Ensure no lingering animation frames before starting new one
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            // Start the game loop again
+            startGame();
+        }
+
+        // Add event listener for restart button
+        restartButton.addEventListener('click', restartGame);
+
 
         // Function to load all necessary images
         function loadAllImages() {
@@ -267,14 +379,32 @@
 
             const imageToDraw = loadedImages[imageKey];
 
+            let finalX = character.x;
+            let finalY = character.y + offsetY; // Apply breathing offset
+
+            // Apply shaking offset if character is shaking
+            if (character.isShaking) {
+                // Random offset within the amplitude for X and Y
+                finalX += (Math.random() - 0.5) * 2 * SHAKE_AMPLITUDE;
+                finalY += (Math.random() - 0.5) * 2 * SHAKE_AMPLITUDE;
+            }
+
             // Draw the image if it's loaded and ready
             if (imageToDraw && imageToDraw.complete && imageToDraw.naturalWidth !== 0) {
-                ctx.drawImage(imageToDraw, character.x, character.y + offsetY, playerSize, playerSize);
+                ctx.drawImage(imageToDraw, finalX, finalY, playerSize, playerSize);
             } else {
                 // Fallback to drawing a coloured square if the image isn't loaded yet or failed
                 ctx.fillStyle = isMonster ? '#60a5fa' : '#ef4444'; // Blue for monster, Red for player
-                ctx.fillRect(character.x, character.y, playerSize, playerSize);
+                ctx.fillRect(finalX, finalY, playerSize, playerSize);
             }
+
+            // --- Flashing animation overlay ---
+            // Draw flashing overlay on top of the character
+            if (character.isFlashing) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'; // Semi-transparent white flash
+                ctx.fillRect(finalX, finalY, playerSize, playerSize);
+            }
+            // --- End Flashing animation overlay ---
         }
 
         // Draw UI elements (HP, XP, Level)
@@ -291,11 +421,48 @@
             }
         }
 
-        // Clear the canvas
-        function clearCanvas() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Draw the game background (forest and cave)
+        function drawBackground() {
+            // Base ground color (light green/brown)
+            ctx.fillStyle = '#6B8E23'; // Olive Green
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Darker green for forest areas/trees (randomly placed or patterned)
+            // Example: simple tree shapes
+            ctx.fillStyle = '#355E3B'; // Darker Green
+            const treeSize = playerSpeed; // Trees are same size as movement block
+            // Top row of trees
+            for (let x = 0; x < canvas.width; x += treeSize) {
+                ctx.fillRect(x, 0, treeSize, treeSize * 2); // Two blocks tall
+            }
+            // Bottom row of trees
+            for (let x = 0; x < canvas.width; x += treeSize) {
+                ctx.fillRect(x, canvas.height - treeSize * 2, treeSize, treeSize * 2);
+            }
+            // Left column of trees (avoid corners already covered)
+            for (let y = treeSize * 2; y < canvas.height - treeSize * 2; y += treeSize) {
+                ctx.fillRect(0, y, treeSize * 2, treeSize); // Two blocks wide
+            }
+            // Right column of trees (avoid corners already covered)
+            for (let y = treeSize * 2; y < canvas.height - treeSize * 2; y += treeSize) {
+                ctx.fillRect(canvas.width - treeSize * 2, y, treeSize * 2, treeSize);
+            }
+
+            // Cave entrance (darker grey/black rectangle) - e.g., bottom-left corner
+            ctx.fillStyle = '#333333'; // Dark Grey
+            const caveWidth = playerSize * 2; // 2 warrior sizes wide
+            const caveHeight = playerSize; // 1 warrior size tall
+            ctx.fillRect(playerSpeed, canvas.height - caveHeight - playerSpeed, caveWidth, caveHeight); // Positioned slightly off edge
+            ctx.fillStyle = '#222222'; // Even darker for inner cave
+            ctx.fillRect(playerSpeed + playerSpeed/2, canvas.height - caveHeight - playerSpeed + playerSpeed/2, caveWidth - playerSpeed, caveHeight - playerSpeed);
         }
 
+        // Clear the canvas (now draws background)
+        function clearCanvas() {
+            drawBackground();
+        }
+
+        // Check if characters are on adjacent tiles (horizontal or vertical)
         function areCharactersAdjacent(char1, char2) {
             const dx = Math.abs(char1.x - char2.x);
             const dy = Math.abs(char1.y - char2.y);
@@ -306,6 +473,18 @@
         // Handles mutual combat when characters try to move into each other's tile
         function handleCombat() {
             if (gameOver || monster.isDefeated) return;
+
+            // Trigger flashing animation for both characters
+            player.isFlashing = true;
+            monster.isFlashing = true;
+            player.flashTimer = player.flashDuration;
+            monster.flashTimer = monster.flashDuration;
+
+            // Trigger shaking animation for both characters
+            player.isShaking = true;
+            monster.isShaking = true;
+            player.shakeTimer = SHAKE_DURATION;
+            monster.shakeTimer = SHAKE_DURATION;
 
             // Play hit sound when combat occurs
             playHitSound();
@@ -342,7 +521,8 @@
             if (player.hp <= 0) {
                 player.hp = 0;
                 gameOver = true;
-                showMessage("Game Over! Your warrior was defeated.", 3000);
+                gameOverMessage.textContent = "Your warrior was defeated!"; // Set specific message
+                gameOverScreen.style.display = 'flex'; // Show game over screen
                 cancelAnimationFrame(animationFrameId); // Stop the game loop
             }
         }
@@ -361,11 +541,11 @@
         // Main game loop
         function gameLoop(currentTime) {
             if (gameOver) {
-                // Optionally draw a game over screen here
+                // If game is over, just return. The game over screen is already displayed.
                 return;
             }
 
-            clearCanvas();
+            clearCanvas(); // Draws the background now
 
             // --- Player Breathing Animation ---
             let breathingOffset = 0;
@@ -379,6 +559,39 @@
                 player.breathingFrameIndex = 0;
                 player.lastBreathingFrameTime = currentTime;
             }
+
+            // Update flashing timers
+            const deltaTime = currentTime - (player.lastFrameTime || currentTime); // Calculate delta time
+            if (player.isFlashing) {
+                player.flashTimer -= deltaTime;
+                if (player.flashTimer <= 0) {
+                    player.isFlashing = false;
+                }
+            }
+            if (monster.isFlashing) {
+                monster.flashTimer -= deltaTime;
+                if (monster.flashTimer <= 0) {
+                    monster.isFlashing = false;
+                }
+            }
+
+            // Update shaking timers
+            if (player.isShaking) {
+                player.shakeTimer -= deltaTime;
+                if (player.shakeTimer <= 0) {
+                    player.isShaking = false;
+                }
+            }
+            if (monster.isShaking) {
+                monster.shakeTimer -= deltaTime;
+                if (monster.shakeTimer <= 0) {
+                    monster.isShaking = false;
+                }
+            }
+            player.lastFrameTime = currentTime; // Store current time for next frame's delta calculation
+            monster.lastFrameTime = currentTime; // Store current time for next frame's delta calculation
+
+
             drawCharacter(player, false, breathingOffset); // Pass false for isMonster
 
             // --- Monster Movement Logic ---
@@ -419,7 +632,7 @@
                 nextMonsterY = Math.round(nextMonsterY / monster.speed) * monster.speed;
 
                 // Check if the monster's *intended* next tile is the player's current tile
-                if (nextMonsterX === player.x && nextMonsterY === player.y) {
+                if (!player.isDefeated && nextMonsterX === player.x && nextMonsterY === player.y) {
                     // If monster tries to move onto player, initiate combat but don't move monster
                     handleCombat();
                     // Monster's position remains unchanged, so 'movedMonster' remains false for actual movement
@@ -529,6 +742,8 @@
             window.addEventListener('resize', resizeCanvas); // Listen for window resize events
             player.lastBreathingFrameTime = performance.now(); // Initialize for gameLoop
             monster.lastMoveTime = performance.now(); // Initialize monster's last move time
+            player.lastFrameTime = performance.now(); // Initialize for flash animation delta
+            monster.lastFrameTime = performance.now(); // Initialize for flash animation delta
             gameLoop(performance.now()); // Start the main game animation loop, passing current time
         }
 
