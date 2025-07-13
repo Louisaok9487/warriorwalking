@@ -243,21 +243,22 @@
         const defeatSynth = new Tone.Synth().toDestination();
 
         // Cooldown for hit sound to prevent rapid triggering and Tone.js errors
-        let lastHitSoundTime = 0;
-        const hitSoundCooldown = 100; // milliseconds
+        let lastHitSoundTriggerTime = 0;
+        const hitSoundCooldown = 200; // Increased cooldown to prevent rapid triggering
 
         // Function to play a hit sound
         function playHitSound() {
-            const currentTime = performance.now();
-            if (currentTime - lastHitSoundTime > hitSoundCooldown) {
-                hitSynth.triggerAttackRelease("C4", "8n"); // Plays a C4 note for an 8th note duration
-                lastHitSoundTime = currentTime;
+            // Use Tone.context.currentTime for scheduling to avoid "Start time must be strictly greater" errors
+            const now = Tone.context.currentTime;
+            if (now * 1000 - lastHitSoundTriggerTime > hitSoundCooldown) { // Convert Tone.js time to milliseconds for cooldown check
+                hitSynth.triggerAttackRelease("C4", "8n", now); // Pass Tone.context.currentTime as start time
+                lastHitSoundTriggerTime = now * 1000; // Update last trigger time in milliseconds
             }
         }
 
         // Function to play a defeat sound
         function playDefeatSound() {
-            defeatSynth.triggerAttackRelease("G3", "4n"); // Plays a G3 note for a quarter note duration
+            defeatSynth.triggerAttackRelease("G3", "4n", Tone.context.currentTime); // Pass Tone.context.currentTime as start time
         }
         // --- End Sound Effects Setup ---
 
@@ -293,6 +294,8 @@
             monster.lastMoveTime = performance.now(); // Ensure monster starts moving immediately
             monster.lastFrameTime = performance.now(); // Reset monster's last frame time for animations
 
+            // Reset sound cooldown
+            lastHitSoundTriggerTime = 0;
 
             gameOver = false; // Reset game over flag
             gameOverScreen.style.display = 'none'; // Hide game over screen
