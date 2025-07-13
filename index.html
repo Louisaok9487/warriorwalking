@@ -59,7 +59,7 @@
         <div class="instructions">
             <p><strong>Pixel Warrior Game</strong></p>
             <p>Use <strong>Arrow Keys</strong> to move your warrior.</p>
-            <p>The warrior image will change direction!</p>
+            <p>The warrior will 'breathe' with a classic stepped animation when idle!</p>
             <p><strong>IMPORTANT: Remember to update your actual pixel warrior PNG images to 80x80 pixels and replace the placeholder image URLs in the code!</strong></p>
         </div>
         <canvas id="gameCanvas"></canvas>
@@ -82,7 +82,17 @@
             x: 0, // Initial X position
             y: 0, // Initial Y position
             direction: 'down', // Initial direction
+            isIdle: true, // Flag to track if the player is idle for breathing animation
+            lastMoveTime: Date.now(), // Timestamp of the last movement
+            breathingFrameIndex: 0, // Current frame index for discrete breathing animation
+            lastBreathingFrameTime: 0 // Timestamp of the last breathing frame update
         };
+
+        // Breathing animation constants for stepped animation
+        // Increased vertical offsets to make it more noticeable
+        const BREATHING_FRAMES = [0, -2, 0, 2]; // Vertical offsets in pixels: normal, 2px up, normal, 2px down
+        const BREATHING_INTERVAL = 200; // Milliseconds between each breathing frame change (slightly slower)
+        const IDLE_DELAY = 200; // Milliseconds before breathing animation starts after stopping
 
         // Image URLs for different directions
         // IMPORTANT: Replace these with your actual pixel warrior PNG URLs (now 80x80 pixels)
@@ -97,6 +107,9 @@
         const loadedImages = {};
         let imagesLoadedCount = 0;
         const totalImagesToLoad = Object.keys(playerImageUrls).length;
+
+        // Animation frame ID for cancelling the loop
+        let animationFrameId;
 
         // Function to load all necessary images
         function loadAllImages() {
@@ -132,19 +145,18 @@
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
 
-            // Center the player initially, ensuring it aligns to the new playerSpeed grid
+            // Center the player initially, ensuring it aligns to the playerSpeed grid
             player.x = Math.floor((canvas.width / 2 - playerSize / 2) / playerSpeed) * playerSpeed;
             player.y = Math.floor((canvas.height / 2 - playerSize / 2) / playerSpeed) * playerSpeed;
-
-            drawGame(); // Draw the game after resize
         }
 
         // Draw the player on the canvas
-        function drawPlayer() {
+        function drawPlayer(offsetY = 0) {
             const currentImage = loadedImages[player.direction];
             // Draw the image if it's loaded and ready
             if (currentImage && currentImage.complete && currentImage.naturalWidth !== 0) {
-                ctx.drawImage(currentImage, player.x, player.y, playerSize, playerSize);
+                // Apply the vertical offset for breathing animation
+                ctx.drawImage(currentImage, player.x, player.y + offsetY, playerSize, playerSize);
             } else {
                 // Fallback to drawing a red square if the image isn't loaded yet or failed
                 ctx.fillStyle = '#ef4444'; // Red color for the warrior (Tailwind red-500)
@@ -157,10 +169,28 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
 
-        // Main game drawing function
-        function drawGame() {
-            clearCanvas(); // Clear before drawing
-            drawPlayer(); // Draw the player
+        // Main game loop
+        function gameLoop(currentTime) {
+            clearCanvas();
+
+            let breathingOffset = 0;
+            // Check if player is idle and enough time has passed since last move
+            if (player.isIdle && (currentTime - player.lastMoveTime > IDLE_DELAY)) {
+                // Update breathing frame if enough time has passed
+                if (currentTime - player.lastBreathingFrameTime > BREATHING_INTERVAL) {
+                    player.breathingFrameIndex = (player.breathingFrameIndex + 1) % BREATHING_FRAMES.length;
+                    player.lastBreathingFrameTime = currentTime;
+                }
+                breathingOffset = BREATHING_FRAMES[player.breathingFrameIndex];
+            } else {
+                // Reset breathing frame and timer if moving or not yet idle
+                player.breathingFrameIndex = 0;
+                player.lastBreathingFrameTime = currentTime; // Reset for next idle period
+            }
+
+            drawPlayer(breathingOffset); // Draw player with potential breathing offset
+
+            animationFrameId = requestAnimationFrame(gameLoop); // Continue the loop
         }
 
         // Handle keyboard input
@@ -172,6 +202,10 @@
             if (imagesLoadedCount !== totalImagesToLoad) {
                 return; // Prevent movement if assets are still loading
             }
+
+            // Set player to not idle and update last move time
+            player.isIdle = false;
+            player.lastMoveTime = Date.now(); // Update last move time immediately on keydown
 
             switch (e.key) {
                 case 'ArrowUp':
@@ -206,17 +240,28 @@
 
 
             if (moved) {
-                // Update direction and redraw. Since all images are pre-loaded, no need to call loadImageForDirection here.
+                // Update direction. The gameLoop will handle redrawing.
                 player.direction = newDirection;
-                drawGame();
                 e.preventDefault(); // Prevent default arrow key scrolling behavior
             }
         });
+
+        // Handle keyup to detect when player stops moving
+        document.addEventListener('keyup', (e) => {
+            // After a short delay, set player to idle. This allows for quick consecutive moves without breathing.
+            // The lastMoveTime is updated on keydown, so this timeout correctly applies after movement ceases.
+            setTimeout(() => {
+                player.isIdle = true;
+            }, IDLE_DELAY);
+        });
+
 
         // Function to start the game after all assets are loaded
         function startGame() {
             resizeCanvas(); // Set initial canvas size and player position
             window.addEventListener('resize', resizeCanvas); // Listen for window resize events
+            player.lastBreathingFrameTime = performance.now(); // Initialize for gameLoop
+            gameLoop(performance.now()); // Start the main game animation loop, passing current time
         }
 
         // Initialize the game by loading all images when the window loads
