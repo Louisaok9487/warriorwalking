@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Warrior Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #1a202c; /* Dark background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+        canvas {
+            background-color: #2d3748; /* Darker grey for game background */
+            border: 4px solid #4a5568; /* Border around the game area */
+            border-radius: 8px; /* Rounded corners for the canvas */
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5); /* Soft shadow */
+            display: block;
+            width: 80vmin; /* Responsive width based on viewport */
+            height: 80vmin; /* Keep aspect ratio square */
+            max-width: 600px; /* Max width for larger screens */
+            max-height: 600px; /* Max height for larger screens */
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+        }
+        .instructions {
+            color: #e2e8f0; /* Light text color */
+            font-size: 1.1rem;
+            text-align: center;
+            background-color: #2d3748;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+        .instructions p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="instructions">
+            <p><strong>Pixel Warrior Game</strong></p>
+            <p>Use <strong>Arrow Keys</strong> to move your warrior.</p>
+            <p>The warrior image will change direction!</p>
+            <p><strong>Remember to replace the placeholder image URLs in the code!</strong></p>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        // Get the canvas element and its 2D rendering context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game settings
+        const gridSize = 20; // Size of each "pixel" unit for movement and drawing
+        let playerSize = gridSize * 2; // Player size, adjusted for potentially larger image
+        let playerSpeed = gridSize; // Player movement speed (moves one grid unit at a time)
+
+        // Player object
+        const player = {
+            x: 0, // Initial X position
+            y: 0, // Initial Y position
+            direction: 'down', // Initial direction
+            image: new Image() // Image object for the player
+        };
+
+        // Image URLs for different directions
+        // IMPORTANT: Replace these with your actual pixel warrior PNG URLs
+        const playerImageUrls = {
+            'up': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_up.png?raw=true',    // Placeholder for up-facing warrior
+            'down': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_down.png?raw=true',  // Placeholder for down-facing warrior
+            'left': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_left.png?raw=true',  // Placeholder for left-facing warrior
+            'right': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_right.png?raw=true' // Placeholder for right-facing warrior
+        };
+
+        // Function to load the correct image based on direction
+        function loadImageForDirection() {
+            player.image.src = playerImageUrls[player.direction];
+            // Ensure the image is loaded before drawing to prevent blank squares
+            player.image.onload = () => {
+                drawGame(); // Redraw game once the new image is loaded
+            };
+            // Handle image loading errors
+            player.image.onerror = () => {
+                console.error(`Failed to load image: ${player.image.src}`);
+                // Fallback to a simple red square if image fails to load
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(player.x, player.y, playerSize, playerSize);
+            };
+        }
+
+        // Function to resize canvas and initialize player position
+        function resizeCanvas() {
+            // Set canvas dimensions based on its display size (CSS handles responsiveness)
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            // Center the player initially
+            player.x = Math.floor((canvas.width / 2 - playerSize / 2) / gridSize) * gridSize;
+            player.y = Math.floor((canvas.height / 2 - playerSize / 2) / gridSize) * gridSize;
+
+            // Load the initial image and draw the game
+            loadImageForDirection();
+        }
+
+        // Draw the player on the canvas
+        function drawPlayer() {
+            // Draw the image if it's loaded and ready
+            if (player.image.complete && player.image.naturalWidth !== 0) {
+                ctx.drawImage(player.image, player.x, player.y, playerSize, playerSize);
+            } else {
+                // Fallback to drawing a red square if the image isn't loaded yet or failed
+                ctx.fillStyle = '#ef4444'; // Red color for the warrior (Tailwind red-500)
+                ctx.fillRect(player.x, player.y, playerSize, playerSize);
+            }
+        }
+
+        // Clear the canvas
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Main game drawing function
+        function drawGame() {
+            clearCanvas(); // Clear before drawing
+            drawPlayer(); // Draw the player
+        }
+
+        // Handle keyboard input
+        document.addEventListener('keydown', (e) => {
+            let moved = false;
+            let newDirection = player.direction; // Assume current direction unless changed
+
+            switch (e.key) {
+                case 'ArrowUp':
+                    player.y -= playerSpeed;
+                    newDirection = 'up';
+                    moved = true;
+                    break;
+                case 'ArrowDown':
+                    player.y += playerSpeed;
+                    newDirection = 'down';
+                    moved = true;
+                    break;
+                case 'ArrowLeft':
+                    player.x -= playerSpeed;
+                    newDirection = 'left';
+                    moved = true;
+                    break;
+                case 'ArrowRight':
+                    player.x += playerSpeed;
+                    newDirection = 'right';
+                    moved = true;
+                    break;
+            }
+
+            // Keep player within canvas bounds
+            player.x = Math.max(0, Math.min(player.x, canvas.width - playerSize));
+            player.y = Math.max(0, Math.min(player.y, canvas.height - playerSize));
+
+            if (moved) {
+                // Only change image if direction actually changed
+                if (player.direction !== newDirection) {
+                    player.direction = newDirection;
+                    loadImageForDirection(); // Load new image for the new direction
+                } else {
+                    drawGame(); // Redraw with existing image if only position changed
+                }
+                e.preventDefault(); // Prevent default arrow key scrolling behavior
+            }
+        });
+
+        // Initialize the game when the window loads
+        window.onload = function() {
+            resizeCanvas(); // Set initial canvas size and player position
+            window.addEventListener('resize', resizeCanvas); // Listen for window resize events
+        };
+    </script>
+</body>
+</html>
