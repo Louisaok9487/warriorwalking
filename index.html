@@ -73,9 +73,9 @@
         const loadingMessage = document.getElementById('loadingMessage');
 
         // Game settings
-        const gridSize = 20; // Size of each "pixel" unit for movement and drawing
-        let playerSize = gridSize * 4; // Player size, adjusted to 80x80 pixels (20 * 4 = 80)
-        let playerSpeed = gridSize; // Player movement speed (moves one grid unit at a time)
+        const gridSize = 20; // Base unit for grid calculations
+        let playerSize = gridSize * 4; // Player size, remains 80x80 pixels (20 * 4 = 80)
+        let playerSpeed = gridSize * 2; // Player movement speed: moves 40 pixels per key press (20 * 2 = 40)
 
         // Player object
         const player = {
@@ -132,9 +132,9 @@
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
 
-            // Center the player initially
-            player.x = Math.floor((canvas.width / 2 - playerSize / 2) / gridSize) * gridSize;
-            player.y = Math.floor((canvas.height / 2 - playerSize / 2) / gridSize) * gridSize;
+            // Center the player initially, ensuring it aligns to the new playerSpeed grid
+            player.x = Math.floor((canvas.width / 2 - playerSize / 2) / playerSpeed) * playerSpeed;
+            player.y = Math.floor((canvas.height / 2 - playerSize / 2) / playerSpeed) * playerSpeed;
 
             drawGame(); // Draw the game after resize
         }
@@ -168,6 +168,11 @@
             let moved = false;
             let newDirection = player.direction; // Assume current direction unless changed
 
+            // Only allow movement if all images are loaded
+            if (imagesLoadedCount !== totalImagesToLoad) {
+                return; // Prevent movement if assets are still loading
+            }
+
             switch (e.key) {
                 case 'ArrowUp':
                     player.y -= playerSpeed;
@@ -191,9 +196,14 @@
                     break;
             }
 
-            // Keep player within canvas bounds
+            // Keep player within canvas bounds, aligning to playerSpeed grid
             player.x = Math.max(0, Math.min(player.x, canvas.width - playerSize));
             player.y = Math.max(0, Math.min(player.y, canvas.height - playerSize));
+
+            // Ensure player position snaps to the grid of playerSpeed
+            player.x = Math.round(player.x / playerSpeed) * playerSpeed;
+            player.y = Math.round(player.y / playerSpeed) * playerSpeed;
+
 
             if (moved) {
                 // Update direction and redraw. Since all images are pre-loaded, no need to call loadImageForDirection here.
