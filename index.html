@@ -46,6 +46,12 @@
         .instructions p {
             margin: 5px 0;
         }
+        #loadingMessage {
+            color: #e2e8f0;
+            font-size: 1.5rem;
+            text-align: center;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -54,19 +60,21 @@
             <p><strong>Pixel Warrior Game</strong></p>
             <p>Use <strong>Arrow Keys</strong> to move your warrior.</p>
             <p>The warrior image will change direction!</p>
-            <p><strong>Remember to replace the placeholder image URLs in the code!</strong></p>
+            <p><strong>IMPORTANT: Remember to update your actual pixel warrior PNG images to 80x80 pixels and replace the placeholder image URLs in the code!</strong></p>
         </div>
         <canvas id="gameCanvas"></canvas>
+        <div id="loadingMessage" style="display: none;">Loading game assets...</div>
     </div>
 
     <script>
         // Get the canvas element and its 2D rendering context
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const loadingMessage = document.getElementById('loadingMessage');
 
         // Game settings
         const gridSize = 20; // Size of each "pixel" unit for movement and drawing
-        let playerSize = gridSize * 2; // Player size, adjusted for potentially larger image
+        let playerSize = gridSize * 4; // Player size, adjusted to 80x80 pixels (20 * 4 = 80)
         let playerSpeed = gridSize; // Player movement speed (moves one grid unit at a time)
 
         // Player object
@@ -74,32 +82,48 @@
             x: 0, // Initial X position
             y: 0, // Initial Y position
             direction: 'down', // Initial direction
-            image: new Image() // Image object for the player
         };
 
         // Image URLs for different directions
-        // IMPORTANT: Replace these with your actual pixel warrior PNG URLs
+        // IMPORTANT: Replace these with your actual pixel warrior PNG URLs (now 80x80 pixels)
         const playerImageUrls = {
-            'up': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_up.png?raw=true',    // Placeholder for up-facing warrior
-            'down': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_down.png?raw=true',  // Placeholder for down-facing warrior
-            'left': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_left.png?raw=true',  // Placeholder for left-facing warrior
-            'right': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_right.png?raw=true' // Placeholder for right-facing warrior
+            'up': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_up.png?raw=true',
+            'down': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_down.png?raw=true',
+            'left': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_left.png?raw=true',
+            'right': 'https://github.com/Louisaok9487/warriorwalking/blob/main/images/warrior_right.png?raw=true'
         };
 
-        // Function to load the correct image based on direction
-        function loadImageForDirection() {
-            player.image.src = playerImageUrls[player.direction];
-            // Ensure the image is loaded before drawing to prevent blank squares
-            player.image.onload = () => {
-                drawGame(); // Redraw game once the new image is loaded
-            };
-            // Handle image loading errors
-            player.image.onerror = () => {
-                console.error(`Failed to load image: ${player.image.src}`);
-                // Fallback to a simple red square if image fails to load
-                ctx.fillStyle = '#ef4444';
-                ctx.fillRect(player.x, player.y, playerSize, playerSize);
-            };
+        // Object to store loaded Image objects
+        const loadedImages = {};
+        let imagesLoadedCount = 0;
+        const totalImagesToLoad = Object.keys(playerImageUrls).length;
+
+        // Function to load all necessary images
+        function loadAllImages() {
+            loadingMessage.style.display = 'block'; // Show loading message
+            for (const direction in playerImageUrls) {
+                const img = new Image();
+                img.src = playerImageUrls[direction];
+                img.onload = () => {
+                    imagesLoadedCount++;
+                    loadedImages[direction] = img; // Store the loaded image
+                    if (imagesLoadedCount === totalImagesToLoad) {
+                        loadingMessage.style.display = 'none'; // Hide loading message
+                        startGame(); // Start the game once all images are loaded
+                    }
+                };
+                img.onerror = () => {
+                    console.error(`Failed to load image: ${playerImageUrls[direction]}. Using fallback.`);
+                    // Even if an image fails, count it as loaded to proceed
+                    imagesLoadedCount++;
+                    // Store a placeholder or null if image fails, and handle in drawPlayer
+                    loadedImages[direction] = null;
+                    if (imagesLoadedCount === totalImagesToLoad) {
+                        loadingMessage.style.display = 'none';
+                        startGame();
+                    }
+                };
+            }
         }
 
         // Function to resize canvas and initialize player position
@@ -112,15 +136,15 @@
             player.x = Math.floor((canvas.width / 2 - playerSize / 2) / gridSize) * gridSize;
             player.y = Math.floor((canvas.height / 2 - playerSize / 2) / gridSize) * gridSize;
 
-            // Load the initial image and draw the game
-            loadImageForDirection();
+            drawGame(); // Draw the game after resize
         }
 
         // Draw the player on the canvas
         function drawPlayer() {
+            const currentImage = loadedImages[player.direction];
             // Draw the image if it's loaded and ready
-            if (player.image.complete && player.image.naturalWidth !== 0) {
-                ctx.drawImage(player.image, player.x, player.y, playerSize, playerSize);
+            if (currentImage && currentImage.complete && currentImage.naturalWidth !== 0) {
+                ctx.drawImage(currentImage, player.x, player.y, playerSize, playerSize);
             } else {
                 // Fallback to drawing a red square if the image isn't loaded yet or failed
                 ctx.fillStyle = '#ef4444'; // Red color for the warrior (Tailwind red-500)
@@ -172,22 +196,21 @@
             player.y = Math.max(0, Math.min(player.y, canvas.height - playerSize));
 
             if (moved) {
-                // Only change image if direction actually changed
-                if (player.direction !== newDirection) {
-                    player.direction = newDirection;
-                    loadImageForDirection(); // Load new image for the new direction
-                } else {
-                    drawGame(); // Redraw with existing image if only position changed
-                }
+                // Update direction and redraw. Since all images are pre-loaded, no need to call loadImageForDirection here.
+                player.direction = newDirection;
+                drawGame();
                 e.preventDefault(); // Prevent default arrow key scrolling behavior
             }
         });
 
-        // Initialize the game when the window loads
-        window.onload = function() {
+        // Function to start the game after all assets are loaded
+        function startGame() {
             resizeCanvas(); // Set initial canvas size and player position
             window.addEventListener('resize', resizeCanvas); // Listen for window resize events
-        };
+        }
+
+        // Initialize the game by loading all images when the window loads
+        window.onload = loadAllImages;
     </script>
 </body>
 </html>
